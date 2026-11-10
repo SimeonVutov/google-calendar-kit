@@ -24,6 +24,10 @@ interactive sign-in has a separate three-minute deadline. The browser opener mus
 return promptly: waiting for the callback inside it would prevent the listener from
 processing the redirect.
 
+Applications that need clean worker shutdown can pass a C++ `std::stop_token`
+to `make_curl_transport()` and `sign_in()`. Cancellation stops the OAuth listener
+or aborts the transfer cooperatively and returns `ErrorCode::Cancelled`.
+
 Applications own workers and scheduling. Keep a shared session and transport alive
 for the client. The provided transport serializes requests and reuses its connection;
 the session protects token refresh with a mutex. Do not sign in, restore, or clear

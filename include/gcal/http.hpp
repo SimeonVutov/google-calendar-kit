@@ -7,6 +7,7 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <stop_token>
 #include <string>
 
 namespace gcal {
@@ -31,6 +32,7 @@ class HttpTransport {
 
 // Reuses one connection handle. A transport serializes its own requests.
 std::shared_ptr<HttpTransport>
-make_curl_transport(std::chrono::seconds timeout = std::chrono::seconds(30));
+make_curl_transport(std::chrono::seconds timeout = std::chrono::seconds(30),
+                    std::stop_token stop = {});
 
 } // namespace gcal

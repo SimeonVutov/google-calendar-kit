@@ -43,8 +43,8 @@ std::size_t append_body(char *data, std::size_t size, std::size_t count, void *c
 
 class CurlTransport final : public HttpTransport {
   public:
-    explicit CurlTransport(std::chrono::seconds timeout)
-        : handle_(nullptr, curl_easy_cleanup), timeout_(timeout) {
+    explicit CurlTransport(std::chrono::seconds timeout, std::stop_token stop)
+        : handle_(nullptr, curl_easy_cleanup), timeout_(timeout), stop_(stop) {
         static const CurlGlobal global;
         handle_.reset(curl_easy_init());
         if (!handle_)
@@ -55,6 +55,8 @@ class CurlTransport final : public HttpTransport {
 
     Result<HttpResponse> send(const HttpRequest &request) override {
         std::lock_guard lock(mutex_);
+        if (stop_.stop_requested())
+            return Error{ErrorCode::Cancelled, "Request cancelled"};
         curl_easy_reset(handle_.get());
         Headers headers(nullptr, curl_slist_free_all);
         for (const auto &[name, value] : request.headers) {
@@ -76,9 +78,20 @@ class CurlTransport final : public HttpTransport {
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, static_cast<long>(timeout_.count()));
         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
         curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(
+            curl, CURLOPT_XFERINFOFUNCTION,
+            +[](void *context, curl_off_t, curl_off_t, curl_off_t, curl_off_t) -> int {
+                return static_cast<std::stop_token *>(context)->stop_requested() ? 1 : 0;
+            });
+        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &stop_);
+#if LIBCURL_VERSION_NUM >= 0x075500
         curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "https");
+#else
+        curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+#endif
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
-        curl_easy_setopt(curl, CURLOPT_USERAGENT, "google-calendar-kit/0.1.0");
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "google-calendar-kit/0.2.0");
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, append_body);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response.body);
         if (!request.body.empty()) {
@@ -88,6 +101,8 @@ class CurlTransport final : public HttpTransport {
         }
 
         const auto status = curl_easy_perform(curl);
+        if (status == CURLE_ABORTED_BY_CALLBACK && stop_.stop_requested())
+            return Error{ErrorCode::Cancelled, "Request cancelled"};
         if (status != CURLE_OK)
             return Error{status == CURLE_OPERATION_TIMEDOUT ? ErrorCode::Timeout
                                                             : ErrorCode::Network,
@@ -103,12 +118,14 @@ class CurlTransport final : public HttpTransport {
     Curl handle_;
     std::chrono::seconds timeout_;
     std::mutex mutex_;
+    std::stop_token stop_;
 };
 
 } // namespace
 
-std::shared_ptr<HttpTransport> make_curl_transport(std::chrono::seconds timeout) {
-    return std::make_shared<CurlTransport>(timeout);
+std::shared_ptr<HttpTransport> make_curl_transport(std::chrono::seconds timeout,
+                                                   std::stop_token stop) {
+    return std::make_shared<CurlTransport>(timeout, stop);
 }
 
 std::string detail::escape(const std::string &value) {

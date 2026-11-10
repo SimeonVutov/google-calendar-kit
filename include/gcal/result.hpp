@@ -10,6 +10,7 @@
 namespace gcal {
 
 enum class ErrorCode {
+    Cancelled,
     InvalidArgument,
     AuthenticationRequired,
     PermissionDenied,

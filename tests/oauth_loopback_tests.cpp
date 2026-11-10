@@ -157,6 +157,27 @@ void test_denial_timeout_and_browser_failure() {
     require(!failed, "Browser launch failure ignored");
 }
 
+void test_cancellation() {
+    auto endpoint = std::make_shared<TokenEndpoint>();
+    gcal::OAuthSession session({"fixture-client"}, endpoint);
+    std::stop_source stop;
+    std::jthread cancel;
+    auto result = session.sign_in(
+        [&](const std::string &) -> gcal::Status {
+            cancel = std::jthread([&] { stop.request_stop(); });
+            return gcal::Done{};
+        },
+        std::chrono::seconds(5), stop.get_token());
+    require(!result && result.error().code == gcal::ErrorCode::Cancelled,
+            "Cancellation did not stop sign-in");
+    require(endpoint->requests.empty(), "Cancelled sign-in exchanged a token");
+
+    auto transport = gcal::make_curl_transport(std::chrono::seconds(1), stop.get_token());
+    auto request = transport->send({"GET", "https://example.com", {}, {}});
+    require(!request && request.error().code == gcal::ErrorCode::Cancelled,
+            "Cancelled request attempted network I/O");
+}
+
 } // namespace
 
 int main() {
@@ -164,6 +185,7 @@ int main() {
         auto initialize_curl = gcal::make_curl_transport();
         test_success_and_state_validation();
         test_denial_timeout_and_browser_failure();
+        test_cancellation();
         std::cout << "All loopback OAuth tests passed\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';

@@ -111,7 +111,9 @@ Result<std::string> OAuthSession::access_token(bool force_refresh) {
 }
 
 Result<Tokens> OAuthSession::sign_in(const BrowserOpener &open_browser,
-                                     std::chrono::seconds timeout) {
+                                     std::chrono::seconds timeout, std::stop_token stop) {
+    if (stop.stop_requested())
+        return Error{ErrorCode::Cancelled, "Authorization cancelled"};
     if (config_.client_id.empty() || config_.scopes.empty() || !open_browser ||
         timeout.count() <= 0)
         return Error{ErrorCode::InvalidArgument,
@@ -153,9 +155,11 @@ Result<Tokens> OAuthSession::sign_in(const BrowserOpener &open_browser,
                 return opened.error();
             return url;
         },
-        state.value(), timeout);
+        state.value(), timeout, stop);
     if (!authorization)
         return authorization.error();
+    if (stop.stop_requested())
+        return Error{ErrorCode::Cancelled, "Authorization cancelled"};
 
     std::map<std::string, std::string> parameters{
         {"client_id", config_.client_id},

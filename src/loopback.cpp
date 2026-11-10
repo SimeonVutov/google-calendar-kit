@@ -137,7 +137,8 @@ class CallbackConnection : public std::enable_shared_from_this<CallbackConnectio
 
 Result<AuthorizationCode>
 receive_authorization(const std::function<Result<std::string>(const std::string &)> &authorize,
-                      const std::string &expected_state, std::chrono::seconds timeout) {
+                      const std::string &expected_state, std::chrono::seconds timeout,
+                      std::stop_token stop) {
     net::io_context context;
     tcp::acceptor listener(context);
     boost::system::error_code error;
@@ -159,6 +160,10 @@ receive_authorization(const std::function<Result<std::string>(const std::string 
             context.stop();
         }
     };
+    std::stop_callback cancellation(stop, [&] {
+        net::post(context,
+                  [&] { complete(Error{ErrorCode::Cancelled, "Authorization cancelled"}); });
+    });
     deadline.async_wait([&](boost::system::error_code timer_error) {
         if (!timer_error)
             complete(Error{ErrorCode::Timeout, "Browser authorization timed out"});

@@ -22,6 +22,6 @@ struct AuthorizationCode {
 
 Result<AuthorizationCode> receive_authorization(
     const std::function<Result<std::string>(const std::string &redirect_uri)> &authorize,
-    const std::string &expected_state, std::chrono::seconds timeout);
+    const std::string &expected_state, std::chrono::seconds timeout, std::stop_token stop);
 
 } // namespace gcal::detail

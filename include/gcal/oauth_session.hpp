@@ -33,7 +33,8 @@ class OAuthSession {
     OAuthSession(OAuthConfig config, std::shared_ptr<HttpTransport> transport);
 
     Result<Tokens> sign_in(const BrowserOpener &open_browser,
-                           std::chrono::seconds timeout = std::chrono::minutes(3));
+                           std::chrono::seconds timeout = std::chrono::minutes(3),
+                           std::stop_token stop = {});
     void restore_tokens(Tokens tokens);
     Tokens tokens() const;
     void clear_tokens();
