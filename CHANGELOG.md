@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+
+- Cancel in-flight HTTP requests and pending desktop sign-in with a C++ stop token.
+- Add an optional Arch package build and simplify portable installation instructions.
+
 ## 0.1.0 — Initial prerelease
 
 - Framework-independent C++20 library with CMake installation and package exports.

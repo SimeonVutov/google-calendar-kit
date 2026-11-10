@@ -1,144 +1,71 @@
 # google-calendar-kit
 
-A small C++20 library for reading and editing Google Calendar. Framework-independent,
-with browser sign-in, automatic token refresh, typed events, and explicit errors.
+A small, framework-independent C++20 library for Google Calendar. Sign in with
+OAuth, list calendars and events, and create, edit, move, or delete events.
 
-Author: [Simeon Vutov](https://github.com/SimeonVutov).
+By [Simeon Vutov](https://github.com/SimeonVutov). [Apache 2.0](LICENSE).
 
-## Features
+## Install on Linux
 
-- List calendars and events in a date range, including recurring occurrences.
-- Create, edit, reschedule, and delete individual events or occurrences.
-- Preserve time zones, all-day dates, descriptions, Unicode titles, and color IDs.
-- Detect stale edits with ETags instead of silently overwriting newer changes.
-- Browser authorization with PKCE and an ephemeral loopback callback.
+Install a C++20 compiler, CMake 3.24+, and development packages for libcurl,
+OpenSSL, Boost 1.74+, and nlohmann/json 3.10+.
 
-The library has no Qt dependency, database, daemon, polling loop, or offline write queue.
-Calls perform blocking I/O; GUI applications should use their own worker thread.
-
-## Build and install
-
-Requirements: C++20, CMake 3.24+, libcurl, OpenSSL, Boost 1.74+, and nlohmann/json 3.10+.
-On Arch Linux:
+On Debian/Ubuntu, for example:
 
 ```sh
-sudo pacman -S --needed base-devel cmake ninja curl openssl boost nlohmann-json
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+sudo apt install g++ cmake libcurl4-openssl-dev libssl-dev libboost-dev nlohmann-json3-dev
+```
+
+Build from source and install to a prefix of your choice:
+
+```sh
+git clone https://github.com/SimeonVutov/google-calendar-kit.git
+cd google-calendar-kit
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure
 cmake --install build --prefix "$HOME/.local"
 ```
 
-The default build produces a static library. Add `-DBUILD_SHARED_LIBS=ON` for a shared
-library, or `-DGCAL_BUILD_EXAMPLES=OFF` to omit the example executable.
+Add `-DBUILD_SHARED_LIBS=ON` if you want a shared library.
 
-In another CMake project:
+**Arch Linux:** after cloning, you can use the optional package instead:
+
+```sh
+cd packaging/arch
+makepkg -si
+```
+
+This builds from the checkout and installs through pacman. No AUR publication is required.
+
+## Use the library
 
 ```cmake
 find_package(GoogleCalendarKit CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE gcal::calendar)
 ```
 
-Set `CMAKE_PREFIX_PATH` to the installation prefix if CMake cannot locate the package.
-Alternatively, use `add_subdirectory()` and link the same target.
+For a non-system installation, point `CMAKE_PREFIX_PATH` at the chosen prefix.
+Include `<gcal/client.hpp>` and use `OAuthSession` to authenticate, then `Client`
+to work with calendars and events. See the [API and integration notes](docs/design.md).
 
-## Connect an account
-
-Enable the Calendar API in a Google Cloud project, configure OAuth consent, and
-create a **Desktop app** OAuth client. Keep its downloaded configuration outside
-this repository. The example signs in and lists calendars:
+To test sign-in with the CMake build:
 
 ```sh
 ./build/calendar-list /path/to/desktop-client.json
 ```
 
-Open the printed URL in your browser. The example keeps tokens only for that process.
-The library does not read configuration files or start a browser itself; the example
-loads configuration, while your application supplies its own browser opener.
+Follow the [Google account setup guide](docs/authentication.md) to create that
+file. Keep the configuration and tokens outside the repository.
 
-```cpp
-auto transport = gcal::make_curl_transport();
-auto session = std::make_shared<gcal::OAuthSession>(config, transport);
+## Scope
 
-// Run on a worker. The opener must launch the browser and return promptly.
-auto login = session->sign_in(open_browser);
-if (!login) {
-    show_error(login.error().message);
-    return;
-}
+The caller runs blocking operations on its own worker, chooses which calendars
+to fetch, and owns token storage and refresh scheduling. The core has no Qt,
+database, or background service. Individual recurring occurrences are supported;
+series-wide edits are outside the current scope.
 
-gcal::Client calendar(session, transport);
-auto events = calendar.events("primary", {
-    "2026-11-10T00:00:00+02:00",
-    "2026-11-11T00:00:00+02:00",
-    "Europe/Sofia"
-});
-```
+The Quickshell QML adapter is a separate consumer of this library. Its build and
+installation instructions belong to the Quickshell configuration.
 
-`config`, `open_browser`, and `show_error` above belong to your application. Store
-`session->tokens()` in the OS credential store and restore them with `restore_tokens()`
-on startup. Refresh can update tokens: persist the latest snapshot after operations.
-Never put tokens, client configuration, or account data in Git or logs.
-
-## Edit an event
-
-Use an `Event` returned by `events()` or `event()`; it contains the calendar ID,
-event ID, and ETag needed for a conditional write.
-
-```cpp
-gcal::EventPatch changes;
-changes.description = "Updated notes";
-auto updated = calendar.update(event, changes);
-if (!updated) {
-    show_error(updated.error().message);
-    return;
-}
-
-auto moved = calendar.move(updated.value(), gcal::TimedSpan{
-    "2026-11-10T14:00:00+02:00",
-    "2026-11-10T15:00:00+02:00",
-    "Europe/Sofia"
-});
-```
-
-After success, replace the old event with the returned event and its new ETag before
-editing again. An absent patch field is unchanged; an empty string clears a field.
-`DateSpan` uses an exclusive end date. Event colors are Google palette IDs, available
-through `event_colors()`, rather than arbitrary RGB values.
-
-Writes default to Google's `sendUpdates=all`; pass `GuestUpdates::None` or
-`ExternalOnly` when your application needs a different guest-notification policy.
-On `ErrorCode::Conflict`, fetch the latest event and let the user retry deliberately.
-
-## Application integration
-
-Any C++ app can link the library directly. A Quickshell integration would be a
-separate QML plugin that runs calls on a worker and exposes an event model and
-signals. Other languages can use a dedicated binding or process adapter. Those
-adapters are not part of this initial library.
-
-Keep the visible schedule in application memory. Refresh when opening it, periodically
-while active, and after writes. Submit a move once on release, not on each pointer
-update. See [design and integration notes](docs/design.md).
-
-## Development
-
-```sh
-cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DGCAL_ENABLE_SANITIZERS=ON
-cmake --build build-asan
-ctest --test-dir build-asan --output-on-failure
-```
-
-Tests use a fake HTTP transport and local loopback callbacks; no Google credentials
-are needed. GitHub Actions builds with GCC/Clang and runs sanitizer checks.
-
-Current scope: individual events and recurring occurrences. Series edits, switching
-between timed/all-day event types, push notifications, and durable offline storage
-are deliberately unsupported. The 0.x API may change.
-
-## License
-
-[Apache License 2.0](LICENSE). Commercial use is permitted. Preserve copyright,
-license, and applicable attribution notices when redistributing; see [NOTICE](NOTICE).
-
-Google Calendar is a Google product. This project is not affiliated with Google.
+See [CHANGELOG.md](CHANGELOG.md) for changes and [NOTICE](NOTICE) for attribution.
