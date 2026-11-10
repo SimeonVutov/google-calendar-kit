@@ -51,6 +51,15 @@ if(GCAL_BUILD_EXAMPLES)
     target_link_libraries(calendar-list PRIVATE gcal::calendar)
 endif()
 
+if(BUILD_TESTING)
+    add_executable(calendar-tests tests/calendar_tests.cpp)
+    target_link_libraries(calendar-tests PRIVATE gcal::calendar Threads::Threads)
+    add_test(NAME calendar-tests COMMAND calendar-tests)
+    add_executable(oauth-loopback-tests tests/oauth_loopback_tests.cpp)
+    target_link_libraries(oauth-loopback-tests PRIVATE gcal::calendar Boost::headers CURL::libcurl OpenSSL::Crypto Threads::Threads)
+    add_test(NAME oauth-loopback-tests COMMAND oauth-loopback-tests)
+    set_tests_properties(calendar-tests oauth-loopback-tests PROPERTIES TIMEOUT 20)
+endif()
 
 install(TARGETS google_calendar EXPORT GoogleCalendarKitTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
