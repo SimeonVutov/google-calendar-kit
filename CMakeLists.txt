@@ -23,6 +23,8 @@ endif()
 add_library(google_calendar
     src/types.cpp
     src/curl_transport.cpp
+    src/oauth_session.cpp
+    src/loopback.cpp
 )
 add_library(gcal::calendar ALIAS google_calendar)
 set_target_properties(google_calendar PROPERTIES
