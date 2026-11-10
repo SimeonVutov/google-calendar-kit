@@ -3,3 +3,8 @@
 CMakeUserPresets.json
 compile_commands.json
 .cache/
+
+# Local Arch package artifacts
+/packaging/arch/pkg/
+/packaging/arch/src/
+*.pkg.tar.*

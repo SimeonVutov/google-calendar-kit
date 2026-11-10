@@ -1,0 +1,24 @@
+pkgname=google-calendar-kit
+pkgver=0.2.0
+pkgrel=1
+pkgdesc='Small C++20 client library for Google Calendar'
+arch=('x86_64' 'aarch64')
+url='https://github.com/SimeonVutov/google-calendar-kit'
+license=('Apache-2.0')
+depends=('curl' 'openssl' 'nlohmann-json' 'gcc-libs' 'glibc')
+makedepends=('cmake' 'ninja' 'boost')
+
+build() {
+    cmake -S "$startdir/../.." -B "$srcdir/build" -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_SHARED_LIBS=ON
+    cmake --build "$srcdir/build" --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
+}
+
+check() {
+    ctest --test-dir "$srcdir/build" --output-on-failure
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install "$srcdir/build"
+}
