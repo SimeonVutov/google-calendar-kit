@@ -25,6 +25,7 @@ add_library(google_calendar
     src/curl_transport.cpp
     src/oauth_session.cpp
     src/loopback.cpp
+    src/client.cpp
 )
 add_library(gcal::calendar ALIAS google_calendar)
 set_target_properties(google_calendar PROPERTIES
@@ -44,6 +45,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(google_calendar PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+option(GCAL_BUILD_EXAMPLES "Build the calendar-list example" ON)
+if(GCAL_BUILD_EXAMPLES)
+    add_executable(calendar-list examples/calendar_list.cpp)
+    target_link_libraries(calendar-list PRIVATE gcal::calendar)
+endif()
 
 
 install(TARGETS google_calendar EXPORT GoogleCalendarKitTargets
