@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(CURL)
+find_dependency(OpenSSL COMPONENTS Crypto)
+find_dependency(nlohmann_json 3.10)
+find_dependency(Boost 1.74 CONFIG)
+find_dependency(Threads)
+include("${CMAKE_CURRENT_LIST_DIR}/GoogleCalendarKitTargets.cmake")
