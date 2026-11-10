@@ -1,0 +1,64 @@
+name: C++ CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc
+            cc: gcc
+            cxx: g++
+            build_type: Release
+            sanitizers: "OFF"
+            shared: "ON"
+          - compiler: clang
+            cc: clang
+            cxx: clang++
+            build_type: Debug
+            sanitizers: "OFF"
+            shared: "OFF"
+          - compiler: clang-sanitizers
+            cc: clang
+            cxx: clang++
+            build_type: Debug
+            sanitizers: "ON"
+            shared: "OFF"
+    timeout-minutes: 15
+    name: ${{ matrix.compiler }} / ${{ matrix.build_type }}
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ clang cmake ninja-build libboost-dev libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DGCAL_ENABLE_SANITIZERS=${{ matrix.sanitizers }}
+          -DBUILD_SHARED_LIBS=${{ matrix.shared }}
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Check installation
+        if: matrix.sanitizers == 'OFF'
+        run: cmake --install build --prefix "$RUNNER_TEMP/google-calendar-kit"
